@@ -80,12 +80,24 @@ vtangle_empty = function(file, ...) {
   return()
 }
 
-register_vignette_engines = function(pkg) {
-  # the default engine
-  vig_engine('knitr', vweave, '[.]([rRsS](nw|tex)|[Rr](md|html|rst))$')
-  vig_engine('docco_linear', vweave_docco_linear, '[.][Rr](md|markdown)$')
-  vig_engine('docco_classic', vweave_docco_classic, '[.][Rr]mk?d$')
-  vig_engine('rmarkdown', function(...) if (has_package('rmarkdown')) {
+vweave_rmarkdown0 = function(...) {
+  if (has_package("rlang")) {
+    knitr::opts_chunk$set(calling.handlers = list(
+      # First entrace base errors
+      error = rlang::entrace,
+      # Then add backtrace to the error message
+      # TODO: Export `cnd_as_unhandled()`
+      error = function(cnd) stop(rlang:::cnd_as_unhandled(cnd))
+    ))
+
+    # Show full backtraces by default
+    if (is.null(getOption("rlang_backtrace_on_error"))) {
+      old = options(rlang_backtrace_on_error = "full")
+      on.exit(options(old), add = TRUE)
+    }
+  }
+
+  if (has_package('rmarkdown')) {
     test_vig_dep('rmarkdown')
     if (pandoc_available()) {
       vweave_rmarkdown(...)
@@ -100,7 +112,15 @@ register_vignette_engines = function(pkg) {
     # TODO: no longer allow fallback to R Markdown v1
     test_vig_dep('rmarkdown')
     vweave(...)
-  }, '[.][Rr](md|markdown)$')
+  }
+}
+
+register_vignette_engines = function(pkg) {
+  # the default engine
+  vig_engine('knitr', vweave, '[.]([rRsS](nw|tex)|[Rr](md|html|rst))$')
+  vig_engine('docco_linear', vweave_docco_linear, '[.][Rr](md|markdown)$')
+  vig_engine('docco_classic', vweave_docco_classic, '[.][Rr]mk?d$')
+  vig_engine('rmarkdown', vweave_rmarkdown0, '[.][Rr](md|markdown)$')
   # vignette engines that disable tangle
   vig_list = tools::vignetteEngine(package = 'knitr')
   engines  = grep('_notangle$', names(vig_list), value = TRUE, invert = TRUE)
